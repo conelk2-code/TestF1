@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenF1 | Live Track Insights</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --f1-red: #ff1801;
+            --bg: #0a0a0c;
+            --accent: #1f1f27;
+            --text-dim: #888891;
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: var(--bg);
+            color: white;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .app-container { width: 100%; max-width: 900px; }
+
+        /* Header UI */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
+        .logo { font-weight: 700; letter-spacing: -1px; font-size: 1.5rem; color: var(--f1-red); }
+        .session-timer { font-size: 0.9rem; color: var(--text-dim); border: 1px solid var(--accent); padding: 5px 12px; border-radius: 20px; }
+
+        /* Dashboard Grid */
+        .grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+
+        .card { 
+            background: var(--accent); 
+            padding: 25px; 
+            border-radius: 16px; 
+            border: 1px solid rgba(255,255,255,0.05); 
+        }
+
+        .main-countdown { text-align: left; position: relative; overflow: hidden; }
+        .label { text-transform: uppercase; font-size: 0.75rem; color: var(--text-dim); letter-spacing: 2px; }
+        .big-text { font-size: 2.5rem; font-weight: 700; margin: 10px 0; }
+        
+        /* Stats Styling */
+        .stat-row { display: flex; justify-content: space-between; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); }
+        .stat-val { font-weight: 500; color: #fff; }
+
+        /* Live Feed Simulation */
+        .live-feed { max-height: 300px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.85rem; }
+        .feed-item { margin-bottom: 10px; padding: 8px; border-radius: 4px; background: rgba(0,0,0,0.2); border-left: 2px solid var(--f1-red); }
+
+        .loading-pulse { animation: pulse 1.5s infinite; color: var(--f1-red); }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="header">
+        <div class="logo">OPENF1_PRO</div>
+        <div class="session-timer">SESSION_ACTIVE: <span id="user-sec">0</span>s</div>
+    </div>
+
+    <div class="grid">
+        <div class="card main-countdown">
+            <span class="label">Current/Next Session</span>
+            <div class="big-text" id="race-name">Fetching Data...</div>
+            <div id="countdown" style="font-size: 1.2rem; margin-bottom: 20px; font-weight: 300;">Calculating...</div>
+            
+            <div class="stat-row">
+                <span class="label">Circuit</span>
+                <span class="stat-val" id="circuit">---</span>
+            </div>
+            <div class="stat-row">
+                <span class="label">Country</span>
+                <span class="stat-val" id="country">---</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <span class="label">Live Data Stream</span>
+            <div id="feed" class="live-feed">
+                <div class="feed-item">System initialized...</div>
+                <div class="feed-item">Awaiting telemetry...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 1. Session Timer
+    let seconds = 0;
+    setInterval(() => {
+        seconds++;
+        document.getElementById('user-sec').innerText = seconds;
+    }, 1000);
+
+    // 2. OpenF1 Data Fetching
+    async function fetchOpenF1() {
+        const feed = document.getElementById('feed');
+        const addFeed = (msg) => {
+            const div = document.createElement('div');
+            div.className = 'feed-item';
+            div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            feed.prepend(div);
+        };
+
+        try {
+            addFeed("Connecting to api.openf1.org...");
+            // Using the /sessions endpoint with 'latest' filter
+            const res = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
+            const data = await res.json();
+            
+            if (data && data.length > 0) {
+                const session = data[0];
+                document.getElementById('race-name').innerText = session.session_name;
+                document.getElementById('circuit').innerText = session.circuit_short_name;
+                document.getElementById('country').innerText = session.country_name;
+                
+                const raceDate = new Date(session.date_start).getTime();
+                updateCountdown(raceDate);
+                addFeed(`Sync successful: ${session.meeting_key}`);
+            }
+        } catch (e) {
+            addFeed("Error fetching live data.");
+            console.error(e);
+        }
+    }
+
+    function updateCountdown(target) {
+        setInterval(() => {
+            const now = new Date().getTime();
+            const diff = target - now;
+            
+            if (diff < 0) {
+                document.getElementById('countdown').innerHTML = "<span class='loading-pulse'>SESSION IN PROGRESS</span>";
+                return;
+            }
+
+            const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const s = Math.floor((diff % (1000 * 60)) / 1000);
+
+            document.getElementById('countdown').innerText = `${d}d ${h}h ${m}m ${s}s`;
+        }, 1000);
+    }
+
+    fetchOpenF1();
+</script>
+
+</body>
+</html>
