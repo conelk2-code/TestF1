@@ -3,135 +3,167 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>F1 Replay | Historical Data</title>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <title>F1 Archive & Replay Console</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
     <style>
-        :root { --f1-red: #ff1801; --bg: #050505; --panel: #111114; }
-        body { font-family: 'JetBrains Mono', monospace; background: var(--bg); color: #e0e0e0; margin: 0; padding: 20px; }
+        :root { --f1-red: #e10600; --bg: #0b0b0d; --card: #15151e; --text: #f5f5f5; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; overflow: hidden; }
         
-        .container { max-width: 1100px; margin: 0 auto; }
-        .header { border-bottom: 2px solid var(--f1-red); padding-bottom: 10px; margin-bottom: 30px; display: flex; justify-content: space-between; }
+        /* Sidebar Navigation */
+        nav { width: 320px; background: var(--card); border-right: 1px solid #2d2d3a; display: flex; flex-direction: column; }
+        .nav-header { padding: 20px; border-bottom: 1px solid #2d2d3a; }
+        .search-box { padding: 15px; display: flex; flex-direction: column; gap: 10px; }
         
-        .controls { background: var(--panel); padding: 20px; border-radius: 8px; display: grid; grid-template-columns: 1fr 1fr 150px; gap: 10px; margin-bottom: 20px; }
-        
-        input, button { background: #1a1a1f; border: 1px solid #333; color: white; padding: 12px; border-radius: 4px; }
-        button { background: var(--f1-red); cursor: pointer; font-weight: bold; border: none; }
-        button:hover { filter: brightness(1.2); }
+        input, select, button { background: #0b0b0d; border: 1px solid #333; color: white; padding: 10px; border-radius: 4px; }
+        button { background: var(--f1-red); border: none; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #ff1801; }
 
-        .dashboard { display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
-        .sidebar { background: var(--panel); padding: 15px; border-radius: 8px; max-height: 500px; overflow-y: auto; }
-        .main-view { background: var(--panel); padding: 25px; border-radius: 8px; min-height: 400px; position: relative; }
+        #sessionList { overflow-y: auto; flex-grow: 1; }
+        .session-btn { 
+            padding: 15px; border-bottom: 1px solid #2d2d3a; cursor: pointer; font-size: 0.85rem; 
+            transition: 0.2s; border-left: 3px solid transparent; 
+        }
+        .session-btn:hover { background: #1f1f2a; border-left-color: var(--f1-red); }
 
-        .session-item { padding: 10px; border-bottom: 1px solid #222; cursor: pointer; font-size: 0.8rem; }
-        .session-item:hover { background: #1c1c22; }
+        /* Main Content */
+        main { flex-grow: 1; padding: 30px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .panel { background: var(--card); border-radius: 12px; padding: 20px; border: 1px solid #2d2d3a; }
         
-        .lap-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #222; font-size: 0.9rem; }
-        .lap-num { color: var(--f1-red); font-weight: bold; }
-        
-        .loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--f1-red); }
+        h2 { margin-top: 0; color: var(--f1-red); font-size: 1.2rem; text-transform: uppercase; }
+        table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
+        th { text-align: left; color: #666; padding-bottom: 10px; }
+        td { padding: 8px 0; border-bottom: 1px solid #2d2d3a; }
+
+        .badge { background: #333; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; }
+        .loading-overlay { display: none; color: var(--f1-red); font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="header">
-        <div><strong>F1_HISTORICAL_REPLAY</strong> v1.0</div>
-        <div id="session-clock" style="color: #666;">SESSION_TIME: 0s</div>
-    </div>
-
-    <div class="controls">
-        <input type="number" id="year" value="2023" min="2023" max="2026">
-        <input type="text" id="country" placeholder="Country (e.g. Monza)">
-        <button onclick="findSessions()">FIND SESSIONS</button>
-    </div>
-
-    <div class="dashboard">
-        <div class="sidebar" id="sessionList">
-            <p class="label" style="color:#666; font-size: 0.7rem;">SEARCH RESULTS WILL APPEAR HERE</p>
+    <nav>
+        <div class="nav-header">
+            <h1 style="font-size: 1.2rem; margin: 0;">F1_ARCHIVE</h1>
+            <p style="font-size: 0.7rem; color: #666;">HISTORICAL DATA EXPLORER</p>
         </div>
-        <div class="main-view" id="mainView">
-            <div id="instructions">
-                <h3>Telemetry Replay Mode</h3>
-                <p>1. Search for a year and location.</p>
-                <p>2. Select a Session Key from the sidebar.</p>
-                <p>3. Analyze historical lap times retrieved from OpenF1.</p>
-            </div>
+        <div class="search-box">
+            <select id="year">
+                <option value="2026">2026 Season</option>
+                <option value="2025">2025 Season</option>
+                <option value="2024">2024 Season</option>
+                <option value="2023" selected>2023 Season</option>
+            </select>
+            <input type="text" id="location" placeholder="Country or City...">
+            <button onclick="fetchSessions()">SEARCH RACE</button>
         </div>
-    </div>
-</div>
+        <div id="sessionList"></div>
+    </nav>
+
+    <main id="mainDisplay">
+        <div style="text-align: center; margin-top: 100px; color: #444;">
+            <h2>Select a Race to Begin</h2>
+            <p>Choose a session from the left menu to pull telemetry and standings.</p>
+        </div>
+    </main>
 
 <script>
-    let clock = 0;
-    setInterval(() => { document.getElementById('session-clock').innerText = `SESSION_TIME: ${++clock}s`; }, 1000);
+    const api = "https://api.openf1.org/v1";
 
-    // Find sessions based on year/location
-    async function findSessions() {
-        const year = document.getElementById('year').value;
-        const country = document.getElementById('country').value;
+    async function fetchSessions() {
+        const yr = document.getElementById('year').value;
+        const loc = document.getElementById('location').value;
         const list = document.getElementById('sessionList');
-        
-        list.innerHTML = "Searching...";
-        
+        list.innerHTML = "<p style='padding:20px'>Loading...</p>";
+
         try {
-            let url = `https://api.openf1.org/v1/sessions?year=${year}`;
-            if(country) url += `&country_name=${country}`;
-            
+            let url = `${api}/sessions?year=${yr}`;
+            if(loc) url += `&country_name=${loc}`;
             const res = await fetch(url);
             const data = await res.json();
-            
+
             list.innerHTML = "";
             data.forEach(s => {
                 const div = document.createElement('div');
-                div.className = 'session-item';
-                div.innerHTML = `<strong>${s.session_name}</strong><br>${s.location} (${s.session_key})`;
-                div.onclick = () => loadLapData(s.session_key, s.session_name);
+                div.className = 'session-btn';
+                div.innerHTML = `<strong>${s.session_name}</strong><br><span style="color:#666">${s.location}</span>`;
+                div.onclick = () => loadRaceData(s);
                 list.appendChild(div);
             });
-        } catch (e) { list.innerHTML = "Error fetching data."; }
+        } catch (e) { list.innerHTML = "Error fetching sessions."; }
     }
 
-    // Load lap times for the chosen session
-    async function loadLapData(key, name) {
-        const view = document.getElementById('mainView');
-        view.innerHTML = `<div class="loading">RETRIEVING LAP DATA FOR KEY: ${key}...</div>`;
-        
+    async function loadRaceData(session) {
+        const main = document.getElementById('mainDisplay');
+        main.innerHTML = `<h2>Loading ${session.session_name}...</h2>`;
+
         try {
-            // Fetching Laps (Historical Replay)
-            // Note: We limit to first 50 results to keep it fast
-            const res = await fetch(`https://api.openf1.org/v1/laps?session_key=${key}`);
-            const data = await res.json();
-            
-            view.innerHTML = `<h3>${name} - Lap Analysis</h3>`;
-            
-            if (data.length === 0) {
-                view.innerHTML += "<p>No lap data found for this session.</p>";
-                return;
-            }
+            // Parallel Fetch: Standings and Laps
+            const [posRes, lapRes] = await Promise.all([
+                fetch(`${api}/position?session_key=${session.session_key}`),
+                fetch(`${api}/laps?session_key=${session.session_key}`)
+            ]);
 
-            // Create a table-like view of the replay data
-            const head = document.createElement('div');
-            head.className = 'lap-row';
-            head.style.fontWeight = 'bold';
-            head.innerHTML = `<span>DRIVER #</span><span>LAP</span><span>DURATION</span>`;
-            view.appendChild(head);
+            const posData = await posRes.json();
+            const lapData = await lapRes.json();
 
-            // Show first 30 lap records as a "replay" feed
-            data.slice(0, 30).forEach(lap => {
-                const row = document.createElement('div');
-                row.className = 'lap-row';
-                row.innerHTML = `
-                    <span>#${lap.driver_number}</span>
-                    <span class="lap-num">LAP ${lap.lap_number}</span>
-                    <span>${lap.lap_duration ? lap.lap_duration.toFixed(3) + 's' : 'N/A'}</span>
-                `;
-                view.appendChild(row);
-            });
-            
-            view.innerHTML += `<p style="margin-top:20px; color:#666; font-size:0.8rem;">+ ${data.length - 30} more laps recorded.</p>`;
-            
-        } catch (e) { view.innerHTML = "Error loading lap telemetry."; }
+            // Get Unique Drivers for Leaderboard (Latest Position)
+            const uniqueDrivers = Array.from(new Set(posData.map(p => p.driver_number)));
+            const leaderboard = uniqueDrivers.map(num => {
+                const updates = posData.filter(p => p.driver_number === num);
+                return updates[updates.length - 1];
+            }).sort((a, b) => a.position - b.position);
+
+            renderDashboard(session, leaderboard, lapData);
+        } catch (e) {
+            main.innerHTML = "<h2>Error loading race data.</h2>";
+        }
     }
-</script>
 
+    function renderDashboard(session, leaderboard, laps) {
+        const main = document.getElementById('mainDisplay');
+        main.innerHTML = `
+            <div>
+                <h1 style="margin:0">${session.meeting_name}</h1>
+                <p style="color:#666">${session.circuit_short_name} | ${new Date(session.date_start).toDateString()}</p>
+            </div>
+
+            <div class="stats-grid">
+                <div class="panel">
+                    <h2>Leaderboard</h2>
+                    <table>
+                        <thead><tr><th>POS</th><th>DRIVER #</th><th>DATE/TIME</th></tr></thead>
+                        <tbody>
+                            ${leaderboard.slice(0, 15).map(p => `
+                                <tr>
+                                    <td><span class="badge">${p.position}</span></td>
+                                    <td>#${p.driver_number}</td>
+                                    <td>${new Date(p.date).toLocaleTimeString()}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="panel">
+                    <h2>Fastest Lap Replay (Sample)</h2>
+                    <table>
+                        <thead><tr><th>LAP</th><th>DRIVER</th><th>TIME</th></tr></thead>
+                        <tbody>
+                            ${laps.filter(l => l.lap_duration).slice(0, 15).map(l => `
+                                <tr>
+                                    <td class="badge">${l.lap_number}</td>
+                                    <td>#${l.driver_number}</td>
+                                    <td style="color:var(--f1-red)">${l.lap_duration.toFixed(3)}s</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+
+    fetchSessions(); // Load 2023 by default
+</script>
 </body>
 </html>
