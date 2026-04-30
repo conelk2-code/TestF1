@@ -3,418 +3,268 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenF1 | Intelligence Suite</title>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <title>Race Control | F1 Intelligence Suite</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
     <style>
-        /* ========================================
-           CORE DESIGN SYSTEM (300+ Lines of CSS)
-           ========================================
-        */
         :root {
-            --f1-red: #ff1801;
-            --f1-black: #0b0b0f;
-            --f1-dark: #15151e;
-            --f1-gray: #25252e;
-            --text-main: #ffffff;
-            --text-dim: #8b8b93;
-            --accent-blue: #00d2ff;
-            --success: #00ff87;
-            --glass: rgba(255, 255, 255, 0.03);
-            --border: rgba(255, 255, 255, 0.1);
+            --f1-red: #e10600;
+            --bg-deep: #050505;
+            --panel-bg: #111115;
+            --border: #2b2b30;
+            --text-main: #f0f0f2;
+            --text-dim: #71717a;
+            --safety-car: #ffd700;
         }
 
-        * { box-sizing: border-box; outline: none; }
+        * { box-sizing: border-box; }
         body {
             margin: 0;
-            background: var(--f1-black);
+            background: var(--bg-deep);
             color: var(--text-main);
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Inter', sans-serif;
             display: flex;
             height: 100vh;
             overflow: hidden;
         }
 
-        /* Sidebar & Navigation */
+        /* --- Sidebar Navigation --- */
         aside {
-            width: 320px;
-            background: var(--f1-dark);
+            width: 380px;
+            background: var(--panel-bg);
             border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
-            transition: all 0.3s ease;
+            z-index: 100;
         }
 
-        .brand {
-            padding: 30px;
-            font-weight: 800;
-            font-size: 1.5rem;
-            letter-spacing: -1px;
+        .system-meta {
+            padding: 20px;
             border-bottom: 1px solid var(--border);
-            color: var(--f1-red);
+            background: linear-gradient(to right, #e1060022, transparent);
         }
 
-        .nav-tabs {
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
+        .brand-title { font-weight: 800; font-size: 1.2rem; letter-spacing: 1px; color: var(--f1-red); }
+        .system-status { font-size: 0.7rem; color: var(--text-dim); display: flex; align-items: center; gap: 5px; margin-top: 5px; }
+        .status-dot { width: 6px; height: 6px; background: #00ff00; border-radius: 50%; box-shadow: 0 0 5px #00ff00; }
 
-        .nav-btn {
-            padding: 15px;
-            border-radius: 8px;
-            background: transparent;
-            border: 1px solid transparent;
-            color: var(--text-dim);
-            text-align: left;
-            cursor: pointer;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .nav-btn.active {
-            background: var(--f1-gray);
-            color: white;
-            border-color: var(--f1-red);
-        }
-
-        .search-area {
-            padding: 20px;
-            border-top: 1px solid var(--border);
-        }
-
-        .search-area select, .search-area input {
+        .search-container { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .input-group label { font-size: 0.65rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; margin-bottom: 4px; display: block; }
+        
+        input, select {
             width: 100%;
-            background: var(--f1-black);
+            background: #1c1c21;
             border: 1px solid var(--border);
             color: white;
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 0.85rem;
         }
 
-        /* Main Viewport */
-        main {
+        .btn-fetch {
+            background: var(--f1-red);
+            border: none;
+            color: white;
+            font-weight: 700;
+            padding: 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: 0.2s;
+        }
+        .btn-fetch:hover { filter: brightness(1.2); }
+
+        #session-results {
             flex: 1;
             overflow-y: auto;
-            position: relative;
-            padding: 40px;
-            scroll-behavior: smooth;
+            padding: 15px;
         }
 
-        .view-content {
-            display: none;
-            animation: slideUp 0.4s ease-out;
+        .session-card {
+            background: #1c1c21;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: 0.2s;
+        }
+        .session-card:hover { border-color: var(--f1-red); background: #25252b; }
+        .session-card h4 { margin: 0; font-size: 0.9rem; }
+        .session-card p { margin: 5px 0 0; font-size: 0.75rem; color: var(--text-dim); }
+
+        /* --- Main Dashboard --- */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
 
-        .view-content.active { display: block; }
+        /* Race Control Header */
+        .control-bar {
+            height: 80px;
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 30px;
+            justify-content: space-between;
+        }
 
-        /* Grid System */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(12, 1fr);
+        .playback-engine {
+            display: flex;
+            align-items: center;
             gap: 20px;
-            margin-top: 20px;
-        }
-
-        .card {
-            background: var(--f1-dark);
-            border-radius: 16px;
-            padding: 24px;
-            border: 1px solid var(--border);
-            grid-column: span 12;
-        }
-
-        .card.medium { grid-column: span 6; }
-        .card.small { grid-column: span 4; }
-
-        /* Tables & Data */
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { text-align: left; color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; padding: 12px; border-bottom: 1px solid var(--border); }
-        td { padding: 15px 12px; border-bottom: 1px solid rgba(255,255,255,0.02); font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
-
-        .pos-badge {
-            background: var(--f1-red);
-            color: white;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-
-        /* Loading Animation */
-        #loader {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: var(--f1-red);
+            background: #1c1c21;
             padding: 10px 20px;
-            border-radius: 30px;
-            font-weight: bold;
-            display: none;
-            z-index: 1000;
+            border-radius: 8px;
+            border: 1px solid var(--border);
         }
 
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+        #lap-counter { font-family: 'JetBrains Mono'; font-size: 1.5rem; font-weight: 700; color: var(--f1-red); }
+
+        /* Grid Layout */
+        .dashboard-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            grid-template-rows: 1fr 300px;
+            gap: 15px;
+            padding: 15px;
         }
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: var(--f1-black); }
-        ::-webkit-scrollbar-thumb { background: var(--f1-gray); border-radius: 10px; }
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 12px 20px;
+            background: #1c1c21;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .panel-content { flex: 1; overflow-y: auto; padding: 10px; }
+
+        /* Custom Table Styling */
+        table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono'; font-size: 0.8rem; }
+        th { text-align: left; color: var(--text-dim); padding: 8px; border-bottom: 1px solid var(--border); }
+        td { padding: 10px 8px; border-bottom: 1px solid #1c1c21; }
+
+        .row-driver { display: flex; align-items: center; gap: 10px; }
+        .pos-num { width: 25px; height: 25px; background: var(--border); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.7rem; border-radius: 3px; }
+        .pos-1 { background: var(--f1-red); }
+
+        /* Track Messages */
+        .message-log { display: flex; flex-direction: column-reverse; gap: 8px; }
+        .log-entry { padding: 8px; border-left: 3px solid var(--f1-red); background: #1c1c21; font-size: 0.75rem; }
+        .log-time { color: var(--text-dim); font-size: 0.65rem; margin-bottom: 4px; }
+
+        /* Progress Bar */
+        #timeline-slider { width: 300px; accent-color: var(--f1-red); }
     </style>
 </head>
 <body>
 
-    <div id="loader">POLLING TELEMETRY...</div>
-
     <aside>
-        <div class="brand">F1_INTEL_SYSTEM</div>
-        
-        <div class="nav-tabs">
-            <button class="nav-btn active" onclick="switchView('dashboard')"><i>📊</i> Dashboard</button>
-            <button class="nav-btn" onclick="switchView('leaderboard')"><i>🏁</i> Full Leaderboard</button>
-            <button class="nav-btn" onclick="switchView('telemetry')"><i>🏎️</i> Lap Intelligence</button>
-            <button class="nav-btn" onclick="switchView('archive')"><i>📚</i> Season Archive</button>
+        <div class="system-meta">
+            <div class="brand-title">RACE_CONTROL_V4</div>
+            <div class="system-status"><div class="status-dot"></div> TELEMETRY_LINK_ACTIVE</div>
         </div>
 
-        <div class="search-area">
-            <label style="font-size: 0.7rem; color: var(--text-dim);">DATA PARAMETERS</label>
-            <select id="yearSelect">
-                <option value="2026">2026 Season</option>
-                <option value="2025">2025 Season</option>
-                <option value="2024">2024 Season</option>
-                <option value="2023" selected>2023 Season</option>
-            </select>
-            <input type="text" id="locInput" placeholder="Location (e.g. Monza)">
-            <button onclick="f1App.loadSessions()" style="width:100%; padding:12px; margin-top:5px;">INITIATE FETCH</button>
+        <div class="search-container">
+            <div class="input-group">
+                <label>Archive Year</label>
+                <select id="year-select">
+                    <option value="2024">2024 Season</option>
+                    <option value="2023" selected>2023 Season</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Circuit Location</label>
+                <input type="text" id="loc-input" placeholder="e.g. Silverstone">
+            </div>
+            <button class="btn-fetch" id="btn-search">SEARCH ARCHIVES</button>
         </div>
 
-        <div id="sessionList" style="flex:1; overflow-y:auto; padding:10px;">
+        <div id="session-results">
             </div>
     </aside>
 
     <main>
-        <div id="view-dashboard" class="view-content active">
-            <h1>Session Overview</h1>
-            <p id="active-session-title" style="color: var(--text-dim);">Select a session key to begin analysis</p>
-            
-            <div class="stats-grid">
-                <div class="card small">
-                    <div style="color: var(--text-dim); font-size: 0.8rem;">TOTAL LAPS ANALYZED</div>
-                    <div id="stat-laps" style="font-size: 2rem; font-weight: 800; margin-top: 10px;">0</div>
-                </div>
-                <div class="card small">
-                    <div style="color: var(--text-dim); font-size: 0.8rem;">AVG LAP DURATION</div>
-                    <div id="stat-avg" style="font-size: 2rem; font-weight: 800; margin-top: 10px;">0.000s</div>
-                </div>
-                <div class="card small">
-                    <div style="color: var(--text-dim); font-size: 0.8rem;">RECORDS RETRIEVED</div>
-                    <div id="stat-records" style="font-size: 2rem; font-weight: 800; margin-top: 10px;">0</div>
-                </div>
-                
-                <div class="card medium">
-                    <h2>Track Classification</h2>
-                    <table id="classification-mini">
-                        <thead><tr><th>Pos</th><th>Num</th><th>Status</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-                
-                <div class="card medium">
-                    <h2>Fastest Pace (Samples)</h2>
-                    <table id="pace-mini">
-                        <thead><tr><th>Lap</th><th>Driver</th><th>Time</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
+        <div class="control-bar">
+            <div>
+                <h2 id="active-event" style="margin:0; font-size: 1.1rem;">AWAITING SELECTION</h2>
+                <span id="active-circuit" style="font-size: 0.7rem; color: var(--text-dim);">No active telemetry link</span>
+            </div>
+
+            <div class="playback-engine">
+                <button id="btn-play" class="btn-fetch" style="padding: 8px 15px;">PLAY</button>
+                <div id="lap-counter">LAP 0</div>
+                <input type="range" id="timeline-slider" value="0">
             </div>
         </div>
 
-        <div id="view-leaderboard" class="view-content">
-            <h1>Historical Standings</h1>
-            <div class="card">
-                <table id="full-leaderboard">
-                    <thead>
-                        <tr><th>Position</th><th>Driver Number</th><th>Last Update</th><th>Session Key</th></tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
+        <div class="dashboard-grid">
+            <div class="panel" style="grid-row: span 2;">
+                <div class="panel-header">
+                    <span>Live Classification</span>
+                    <span style="color: var(--f1-red);">Real-Time Intervals</span>
+                </div>
+                <div class="panel-content">
+                    <table id="leaderboard">
+                        <thead>
+                            <tr>
+                                <th>POS</th>
+                                <th>DRIVER</th>
+                                <th>GAP TO LEADER</th>
+                                <th>LAST LAP</th>
+                                <th>TYRE</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
 
-        <div id="view-telemetry" class="view-content">
-            <h1>Lap Intelligence Feed</h1>
-            <div class="card">
-                <table id="full-telemetry">
-                    <thead>
-                        <tr><th>Lap</th><th>Driver</th><th>S1</th><th>S2</th><th>S3</th><th>Lap Time</th></tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
+            <div class="panel">
+                <div class="panel-header">Race Control Messages</div>
+                <div class="panel-content message-log" id="log">
+                    <div class="log-entry">SYSTEM_READY: Select session to stream historical data.</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">Telemetry Stream</div>
+                <div class="panel-content">
+                    <table id="telemetry-table">
+                        <thead>
+                            <tr>
+                                <th>LAP</th>
+                                <th>S1</th>
+                                <th>S2</th>
+                                <th>S3</th>
+                                <th>Pace</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </main>
 
-    <script>
-        /* ========================================
-           CORE ENGINE (700+ Lines of Logic)
-           ========================================
-        */
-
-        const API_BASE = "https://api.openf1.org/v1";
-
-        const f1App = {
-            activeSession: null,
-            dataCache: {
-                laps: [],
-                positions: []
-            },
-
-            init() {
-                this.loadSessions();
-                console.log("F1 Intel Engine Initialized...");
-            },
-
-            async loadSessions() {
-                const yr = document.getElementById('yearSelect').value;
-                const loc = document.getElementById('locInput').value;
-                const list = document.getElementById('sessionList');
-                this.showLoader(true);
-
-                try {
-                    let url = `${API_BASE}/sessions?year=${yr}`;
-                    if(loc) url += `&location=${loc}`;
-                    
-                    const response = await fetch(url);
-                    const data = await response.json();
-                    
-                    list.innerHTML = "";
-                    data.forEach(s => {
-                        const div = document.createElement('div');
-                        div.style.padding = "12px";
-                        div.style.borderBottom = "1px solid var(--border)";
-                        div.style.cursor = "pointer";
-                        div.style.fontSize = "0.8rem";
-                        div.innerHTML = `<strong>${s.session_name}</strong><br><span style="color:var(--text-dim)">${s.location} (${s.session_key})</span>`;
-                        div.onclick = () => this.analyzeSession(s);
-                        list.appendChild(div);
-                    });
-                } catch (e) {
-                    console.error("Fetch Error:", e);
-                } finally {
-                    this.showLoader(false);
-                }
-            },
-
-            async analyzeSession(session) {
-                this.activeSession = session;
-                document.getElementById('active-session-title').innerText = `${session.meeting_name} - ${session.session_name}`;
-                this.showLoader(true);
-
-                try {
-                    // Complexity: Multi-threaded data fetch
-                    const [laps, positions] = await Promise.all([
-                        fetch(`${API_BASE}/laps?session_key=${session.session_key}`).then(r => r.json()),
-                        fetch(`${API_BASE}/position?session_key=${session.session_key}`).then(r => r.json())
-                    ]);
-
-                    this.dataCache.laps = laps;
-                    this.dataCache.positions = positions;
-
-                    this.updateDashboard();
-                    this.updateLeaderboard();
-                    this.updateTelemetry();
-
-                } catch (e) {
-                    alert("Data retrieval limit reached or session unavailable.");
-                } finally {
-                    this.showLoader(false);
-                }
-            },
-
-            updateDashboard() {
-                const laps = this.dataCache.laps;
-                const validLaps = laps.filter(l => l.lap_duration);
-                
-                // Analytics Calculations
-                const totalLaps = laps.length;
-                const avgTime = validLaps.reduce((acc, curr) => acc + curr.lap_duration, 0) / validLaps.length;
-
-                document.getElementById('stat-laps').innerText = totalLaps;
-                document.getElementById('stat-avg').innerText = avgTime ? avgTime.toFixed(3) + "s" : "N/A";
-                document.getElementById('stat-records').innerText = (laps.length + this.dataCache.positions.length);
-
-                // Populate Pace Table
-                const paceBody = document.querySelector('#pace-mini tbody');
-                paceBody.innerHTML = "";
-                validLaps.slice(0, 8).forEach(l => {
-                    const row = `<tr><td>${l.lap_number}</td><td>#${l.driver_number}</td><td style="color:var(--f1-red)">${l.lap_duration.toFixed(3)}s</td></tr>`;
-                    paceBody.innerHTML += row;
-                });
-            },
-
-            updateLeaderboard() {
-                const posData = this.dataCache.positions;
-                const body = document.querySelector('#full-leaderboard tbody');
-                const miniBody = document.querySelector('#classification-mini tbody');
-                body.innerHTML = "";
-                miniBody.innerHTML = "";
-
-                // Logic: Extract unique drivers and their final known position
-                const drivers = [...new Set(posData.map(p => p.driver_number))];
-                const standings = drivers.map(dNum => {
-                    const driverHistory = posData.filter(p => p.driver_number === dNum);
-                    return driverHistory[driverHistory.length - 1];
-                }).sort((a, b) => a.position - b.position);
-
-                standings.forEach(p => {
-                    const row = `<tr><td><span class="pos-badge">${p.position}</span></td><td>#${p.driver_number}</td><td>${new Date(p.date).toLocaleTimeString()}</td><td>${p.session_key}</td></tr>`;
-                    body.innerHTML += row;
-                    
-                    if(p.position <= 10) {
-                        miniBody.innerHTML += `<tr><td>${p.position}</td><td>#${p.driver_number}</td><td style="color:var(--success)">Track</td></tr>`;
-                    }
-                });
-            },
-
-            updateTelemetry() {
-                const body = document.querySelector('#full-telemetry tbody');
-                body.innerHTML = "";
-                
-                this.dataCache.laps.slice(0, 50).forEach(l => {
-                    const row = `
-                        <tr>
-                            <td>${l.lap_number}</td>
-                            <td>#${l.driver_number}</td>
-                            <td>${l.duration_sector_1 || '-'}</td>
-                            <td>${l.duration_sector_2 || '-'}</td>
-                            <td>${l.duration_sector_3 || '-'}</td>
-                            <td style="color:var(--accent-blue)">${l.lap_duration ? l.lap_duration.toFixed(3) : 'PIT'}</td>
-                        </tr>`;
-                    body.innerHTML += row;
-                });
-            },
-
-            showLoader(show) {
-                document.getElementById('loader').style.display = show ? 'block' : 'none';
-            }
-        };
-
-        // UI Routing Engine
-        function switchView(viewId) {
-            document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            
-            document.getElementById(`view-${viewId}`).classList.add('active');
-            event.currentTarget.classList.add('active');
-        }
-
-        // Boot
-        window.onload = () => f1App.init();
-    </script>
+    <script src="app.js"></script>
 </body>
 </html>
