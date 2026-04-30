@@ -1,135 +1,99 @@
-const Engine = {
-    api: "https://api.openf1.org/v1",
-    state: {
-        isPlaying: false,
-        lap: 1,
-        maxLaps: 0,
-        data: { laps: [], pos: [], drivers: [] },
-        timer: null
-    },
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenF1 | Historical Intelligence Suite</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css"> <style>
+        :root {
+            --f1-red: #ff1801; --f1-black: #0b0b0f; --f1-dark: #15151e;
+            --f1-gray: #25252e; --text-main: #ffffff; --text-dim: #8b8b93;
+            --accent-blue: #00d2ff; --glass: rgba(255, 255, 255, 0.03); --border: rgba(255, 255, 255, 0.1);
+        }
+        body { margin: 0; background: var(--f1-black); color: var(--text-main); font-family: 'Plus Jakarta Sans', sans-serif; display: flex; height: 100vh; overflow: hidden; }
+        aside { width: 340px; background: var(--f1-dark); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+        .brand { padding: 25px; font-weight: 800; font-size: 1.4rem; color: var(--f1-red); border-bottom: 1px solid var(--border); }
+        .search-area { padding: 20px; background: rgba(0,0,0,0.2); }
+        .search-area select, .search-area input { width: 100%; background: var(--f1-black); border: 1px solid var(--border); color: white; padding: 12px; border-radius: 6px; margin-bottom: 10px; }
+        #sessionList { flex: 1; overflow-y: auto; padding: 10px; }
+        .session-card { padding: 12px; border-radius: 8px; margin-bottom: 8px; cursor: pointer; border: 1px solid transparent; transition: 0.2s; font-size: 0.85rem; }
+        .session-card:hover { background: var(--f1-gray); border-color: var(--f1-red); }
+        
+        main { flex: 1; overflow-y: auto; padding: 40px; }
+        .dashboard-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
+        .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 20px; }
+        .card { background: var(--f1-dark); border-radius: 16px; padding: 24px; border: 1px solid var(--border); grid-column: span 12; }
+        .card.half { grid-column: span 6; }
+        
+        table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
+        th { text-align: left; color: var(--text-dim); padding: 10px; border-bottom: 1px solid var(--border); }
+        td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.02); }
+        
+        .replay-controls { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+        #replay-progress { flex: 1; accent-color: var(--f1-red); }
+        .status-pill { padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; }
+        .pill-red { background: rgba(255, 24, 1, 0.2); color: var(--f1-red); }
+    </style>
+</head>
+<body>
 
-    init() {
-        document.getElementById('do-search').onclick = () => this.search();
-        document.getElementById('play-btn').onclick = () => this.togglePlay();
-        document.getElementById('lap-range').oninput = (e) => this.jump(e.target.value);
-        this.search(); // Initial load
-    },
+    <aside>
+        <div class="brand">OPENF1_PRO_ARCHIVE</div>
+        <div class="search-area">
+            <select id="yearSelect">
+                <option value="2025">2025 Season</option>
+                <option value="2024">2024 Season</option>
+                <option value="2023" selected>2023 Season</option>
+            </select>
+            <input type="text" id="locInput" placeholder="Location (e.g. Spa)">
+            <button onclick="ui.search()" style="width:100%; background: var(--f1-red); color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer;">SEARCH RECORDS</button>
+        </div>
+        <div id="sessionList"></div>
+    </aside>
 
-    async search() {
-        const yr = document.getElementById('year-in').value;
-        const country = document.getElementById('country-in').value;
-        const list = document.getElementById('session-list');
-        list.innerHTML = "Searching FIA DB...";
+    <main>
+        <div class="dashboard-header">
+            <div>
+                <h1 id="active-title" style="margin:0">Intelligence Dashboard</h1>
+                <p id="active-subtitle" style="color:var(--text-dim)">Select a historical session to reconstruct telemetry.</p>
+            </div>
+            <div id="replay-box" style="display:none; text-align: right;">
+                <span class="status-pill pill-red">Race Replay Mode</span>
+                <div class="replay-controls">
+                    <button onclick="engine.toggleReplay()" id="playBtn">PLAY REPLAY</button>
+                    <input type="range" id="replay-progress" value="0" min="0" max="100">
+                </div>
+            </div>
+        </div>
 
-        try {
-            // FIX: Using country_name instead of location for more reliable results
-            let url = `${this.api}/sessions?year=${yr}`;
-            if (country) url += `&country_name=${country}`;
-            
-            const res = await fetch(url);
-            const data = await res.json();
-            
-            list.innerHTML = "";
-            data.forEach(s => {
-                const div = document.createElement('div');
-                div.className = 'session-item';
-                div.innerHTML = `<strong>${s.session_name}</strong><br><small>${s.meeting_name}</small>`;
-                div.onclick = () => this.load(s);
-                list.appendChild(div);
-            });
-        } catch (e) { list.innerHTML = "No sessions found for that criteria."; }
-    },
+        <div class="grid">
+            <div class="card half">
+                <h2>Live Standings Replay</h2>
+                <table id="leaderboard">
+                    <thead><tr><th>POS</th><th>DRIVER</th><th>GAP</th><th>STATUS</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
 
-    async load(s) {
-        this.stop();
-        document.getElementById('current-event').innerText = s.meeting_name.toUpperCase();
-        document.getElementById('circuit-info').innerText = `${s.location} | Session Key: ${s.session_key}`;
-        this.log(`Attempting to link telemetry for Session ${s.session_key}...`);
+            <div class="card half">
+                <h2>Pit Stop & Interval Analysis</h2>
+                <table id="intervals">
+                    <thead><tr><th>LAP</th><th>DRIVER</th><th>INTERVAL</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
 
-        try {
-            const [laps, pos, drivers] = await Promise.all([
-                fetch(`${this.api}/laps?session_key=${s.session_key}`).then(r => r.json()),
-                fetch(`${this.api}/position?session_key=${s.session_key}`).then(r => r.json()),
-                fetch(`${this.api}/drivers?session_key=${s.session_key}`).then(r => r.json())
-            ]);
+            <div class="card">
+                <h2>Telemetry Stream (Lap Times)</h2>
+                <table id="laps">
+                    <thead><tr><th>LAP NO</th><th>DRIVER #</th><th>S1</th><th>S2</th><th>S3</th><th>LAP TIME</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
 
-            this.state.data = { laps, pos, drivers };
-            this.state.maxLaps = Math.max(...laps.map(l => l.lap_number));
-            this.state.lap = 1;
-            document.getElementById('lap-range').max = this.state.maxLaps;
-            
-            this.log(`Sync complete. ${laps.length} data points cached.`);
-            this.render();
-        } catch (e) { this.log("Error: Session data too large or missing."); }
-    },
-
-    togglePlay() {
-        this.state.isPlaying ? this.stop() : this.start();
-    },
-
-    start() {
-        this.state.isPlaying = true;
-        document.getElementById('play-btn').innerText = "PAUSE";
-        this.state.timer = setInterval(() => {
-            if (this.state.lap < this.state.maxLaps) {
-                this.state.lap++;
-                this.render();
-            } else { this.stop(); }
-        }, 1200); // 1.2s per lap simulation
-    },
-
-    stop() {
-        this.state.isPlaying = false;
-        document.getElementById('play-btn').innerText = "PLAY";
-        clearInterval(this.state.timer);
-    },
-
-    jump(val) {
-        this.state.lap = parseInt(val);
-        this.render();
-    },
-
-    render() {
-        const lap = this.state.lap;
-        document.getElementById('lap-num').innerText = `LAP ${lap}`;
-        document.getElementById('lap-range').value = lap;
-
-        // Build Leaderboard for current lap
-        const standings = this.state.data.drivers.map(d => {
-            const lapInfo = this.state.data.laps.find(l => l.driver_number === d.driver_number && l.lap_number === lap);
-            const posInfo = this.state.data.pos.filter(p => p.driver_number === d.driver_number).slice(0, lap * 2).pop();
-            return {
-                name: d.last_name,
-                num: d.driver_number,
-                pos: posInfo ? posInfo.position : 20,
-                time: lapInfo ? lapInfo.lap_duration : 'PIT',
-                color: d.team_colour
-            };
-        }).sort((a,b) => a.pos - b.pos);
-
-        document.querySelector('#leaderboard tbody').innerHTML = standings.map(s => `
-            <tr>
-                <td><span class="pos-badge ${s.pos==1?'pos-p1':''}">${s.pos}</span></td>
-                <td><span style="border-left:3px solid #${s.color}; padding-left:5px">${s.name}</span></td>
-                <td>+${(s.pos * 0.6).toFixed(3)}s</td>
-                <td>${s.time}</td>
-            </tr>
-        `).join('');
-
-        // Update Telemetry Panel
-        const topPace = this.state.data.laps.filter(l => l.lap_number === lap).slice(0, 5);
-        document.querySelector('#tele-table tbody').innerHTML = topPace.map(l => `
-            <tr><td>${l.lap_number}</td><td>${l.duration_sector_1?.toFixed(2)}</td><td>${l.duration_sector_2?.toFixed(2)}</td><td>${l.duration_sector_3?.toFixed(2)}</td></tr>
-        `).join('');
-    },
-
-    log(msg) {
-        const log = document.getElementById('log-feed');
-        const div = document.createElement('div');
-        div.className = 'log-entry';
-        div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
-        log.prepend(div);
-    }
-};
-
-Engine.init();
+    <script src="app.js"></script>
+</body>
+</html>
