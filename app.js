@@ -1,211 +1,135 @@
-/**
- * F1 RACE CONTROL - REPLAY ENGINE
- * Handles multi-threaded API fetching and state-driven replay simulation.
- */
-
-const RaceEngine = {
-    endpoint: "https://api.openf1.org/v1",
-    
+const Engine = {
+    api: "https://api.openf1.org/v1",
     state: {
         isPlaying: false,
         lap: 1,
         maxLaps: 0,
-        speed: 1200, // ms per lap update
-        intervalId: null,
-        data: {
-            laps: [],
-            positions: [],
-            drivers: [],
-            meeting: null
-        }
+        data: { laps: [], pos: [], drivers: [] },
+        timer: null
     },
 
     init() {
-        this.cacheDOM();
-        this.bindEvents();
+        document.getElementById('do-search').onclick = () => this.search();
+        document.getElementById('play-btn').onclick = () => this.togglePlay();
+        document.getElementById('lap-range').oninput = (e) => this.jump(e.target.value);
+        this.search(); // Initial load
     },
 
-    cacheDOM() {
-        this.dom = {
-            searchBtn: document.getElementById('search-trigger'),
-            yearInput: document.getElementById('year-query'),
-            locInput: document.getElementById('loc-query'),
-            sessionList: document.getElementById('session-list'),
-            playBtn: document.getElementById('play-toggle'),
-            lapText: document.getElementById('lap-indicator'),
-            slider: document.getElementById('replay-slider'),
-            leaderboard: document.querySelector('#main-leaderboard tbody'),
-            telemetry: document.querySelector('#telemetry-stream tbody'),
-            log: document.getElementById('event-log'),
-            meetingName: document.getElementById('meeting-name'),
-            sessionInfo: document.getElementById('session-info')
-        };
-    },
-
-    bindEvents() {
-        this.dom.searchBtn.onclick = () => this.fetchSessions();
-        this.dom.playBtn.onclick = () => this.toggleReplay();
-        this.dom.slider.oninput = (e) => this.jumpToLap(parseInt(e.target.value));
-    },
-
-    async fetchSessions() {
-        this.log("QUEUING ARCHIVE SEARCH...");
-        const yr = this.dom.yearInput.value;
-        const loc = this.dom.locInput.value;
+    async search() {
+        const yr = document.getElementById('year-in').value;
+        const country = document.getElementById('country-in').value;
+        const list = document.getElementById('session-list');
+        list.innerHTML = "Searching FIA DB...";
 
         try {
-            let url = `${this.endpoint}/sessions?year=${yr}`;
-            if (loc) url += `&location=${loc}`;
+            // FIX: Using country_name instead of location for more reliable results
+            let url = `${this.api}/sessions?year=${yr}`;
+            if (country) url += `&country_name=${country}`;
             
             const res = await fetch(url);
             const data = await res.json();
             
-            this.dom.sessionList.innerHTML = '';
+            list.innerHTML = "";
             data.forEach(s => {
-                const item = document.createElement('div');
-                item.className = 'session-item';
-                item.innerHTML = `<h4>${s.session_name}</h4><p>${s.meeting_name}</p>`;
-                item.onclick = () => this.loadRaceData(s);
-                this.dom.sessionList.appendChild(item);
+                const div = document.createElement('div');
+                div.className = 'session-item';
+                div.innerHTML = `<strong>${s.session_name}</strong><br><small>${s.meeting_name}</small>`;
+                div.onclick = () => this.load(s);
+                list.appendChild(div);
             });
-            this.log(`FOUND ${data.length} MATCHING EVENTS.`);
-        } catch (e) {
-            this.log("CONNECTION ERROR: API UNREACHABLE.");
-        }
+        } catch (e) { list.innerHTML = "No sessions found for that criteria."; }
     },
 
-    async loadRaceData(session) {
-        this.log(`SYNCHRONIZING TELEMETRY: ${session.session_key}`);
-        this.stopReplay();
-        
-        this.dom.meetingName.innerText = session.meeting_name.toUpperCase();
-        this.dom.sessionInfo.innerText = `${session.location} | KEY: ${session.session_key}`;
-        
+    async load(s) {
+        this.stop();
+        document.getElementById('current-event').innerText = s.meeting_name.toUpperCase();
+        document.getElementById('circuit-info').innerText = `${s.location} | Session Key: ${s.session_key}`;
+        this.log(`Attempting to link telemetry for Session ${s.session_key}...`);
+
         try {
             const [laps, pos, drivers] = await Promise.all([
-                fetch(`${this.endpoint}/laps?session_key=${session.session_key}`).then(r => r.json()),
-                fetch(`${this.endpoint}/position?session_key=${session.session_key}`).then(r => r.json()),
-                fetch(`${this.endpoint}/drivers?session_key=${session.session_key}`).then(r => r.json())
+                fetch(`${this.api}/laps?session_key=${s.session_key}`).then(r => r.json()),
+                fetch(`${this.api}/position?session_key=${s.session_key}`).then(r => r.json()),
+                fetch(`${this.api}/drivers?session_key=${s.session_key}`).then(r => r.json())
             ]);
 
-            this.state.data = { laps, positions: pos, drivers };
+            this.state.data = { laps, pos, drivers };
             this.state.maxLaps = Math.max(...laps.map(l => l.lap_number));
             this.state.lap = 1;
+            document.getElementById('lap-range').max = this.state.maxLaps;
             
-            this.dom.slider.max = this.state.maxLaps;
-            this.dom.slider.value = 1;
-            
-            this.log(`READY: DATA RECONSTRUCTED FOR ${this.state.maxLaps} LAPS.`);
+            this.log(`Sync complete. ${laps.length} data points cached.`);
             this.render();
-        } catch (e) {
-            this.log("CRITICAL ERROR: DATA RECONSTRUCTION FAILED.");
-        }
+        } catch (e) { this.log("Error: Session data too large or missing."); }
     },
 
-    toggleReplay() {
-        if (this.state.isPlaying) {
-            this.stopReplay();
-        } else {
-            this.startReplay();
-        }
+    togglePlay() {
+        this.state.isPlaying ? this.stop() : this.start();
     },
 
-    startReplay() {
-        if (!this.state.data.laps.length) return;
+    start() {
         this.state.isPlaying = true;
-        this.dom.playBtn.innerText = "PAUSE_REPLAY";
-        this.dom.playBtn.classList.add('active');
-        
-        this.state.intervalId = setInterval(() => {
+        document.getElementById('play-btn').innerText = "PAUSE";
+        this.state.timer = setInterval(() => {
             if (this.state.lap < this.state.maxLaps) {
                 this.state.lap++;
                 this.render();
-            } else {
-                this.stopReplay();
-                this.log("SESSION FINISHED.");
-            }
-        }, this.state.speed);
+            } else { this.stop(); }
+        }, 1200); // 1.2s per lap simulation
     },
 
-    stopReplay() {
+    stop() {
         this.state.isPlaying = false;
-        this.dom.playBtn.innerText = "RESUME_REPLAY";
-        this.dom.playBtn.classList.remove('active');
-        clearInterval(this.state.intervalId);
+        document.getElementById('play-btn').innerText = "PLAY";
+        clearInterval(this.state.timer);
     },
 
-    jumpToLap(lapNum) {
-        this.state.lap = lapNum;
+    jump(val) {
+        this.state.lap = parseInt(val);
         this.render();
     },
 
     render() {
-        const currentLap = this.state.lap;
-        this.dom.lapText.innerText = `LAP ${currentLap}`;
-        this.dom.slider.value = currentLap;
+        const lap = this.state.lap;
+        document.getElementById('lap-num').innerText = `LAP ${lap}`;
+        document.getElementById('lap-range').value = lap;
 
-        // --- Logic: Reconstruct Driver Standings for this lap ---
+        // Build Leaderboard for current lap
         const standings = this.state.data.drivers.map(d => {
-            // Find driver's lap time for current lap
-            const lapData = this.state.data.laps.find(l => l.driver_number === d.driver_number && l.lap_number === currentLap);
-            // Find driver's position update closest to this "moment"
-            // We use a simple slice-and-find to simulate the chronometer
-            const posData = this.state.data.positions
-                            .filter(p => p.driver_number === d.driver_number)
-                            .filter(p => new Date(p.date) <= new Date(lapData?.date_start || Date.now()))
-                            .pop();
-
+            const lapInfo = this.state.data.laps.find(l => l.driver_number === d.driver_number && l.lap_number === lap);
+            const posInfo = this.state.data.pos.filter(p => p.driver_number === d.driver_number).slice(0, lap * 2).pop();
             return {
-                num: d.driver_number,
                 name: d.last_name,
-                pos: posData ? posData.position : 20,
-                time: lapData ? lapData.lap_duration : 'PIT',
+                num: d.driver_number,
+                pos: posInfo ? posInfo.position : 20,
+                time: lapInfo ? lapInfo.lap_duration : 'PIT',
                 color: d.team_colour
             };
-        }).sort((a, b) => a.pos - b.pos);
+        }).sort((a,b) => a.pos - b.pos);
 
-        // --- Render Leaderboard ---
-        this.dom.leaderboard.innerHTML = standings.map(s => `
+        document.querySelector('#leaderboard tbody').innerHTML = standings.map(s => `
             <tr>
-                <td><div class="pos-num ${s.pos <= 3 ? 'pos-top' : ''}">${s.pos}</div></td>
-                <td>
-                    <div class="driver-row">
-                        <div style="width:3px; height:18px; background:#${s.color}"></div>
-                        <strong>${s.name.toUpperCase()}</strong>
-                        <span style="color:var(--text-dim)">#${s.num}</span>
-                    </div>
-                </td>
-                <td>+${(s.pos * 0.725).toFixed(3)}s</td>
-                <td style="color:${s.time < 90 ? 'var(--f1-red)' : 'inherit'}">${s.time}</td>
-                <td><span style="font-size: 0.6rem; color: var(--text-dim);">LIVE</span></td>
+                <td><span class="pos-badge ${s.pos==1?'pos-p1':''}">${s.pos}</span></td>
+                <td><span style="border-left:3px solid #${s.color}; padding-left:5px">${s.name}</span></td>
+                <td>+${(s.pos * 0.6).toFixed(3)}s</td>
+                <td>${s.time}</td>
             </tr>
         `).join('');
 
-        // --- Render Telemetry Panel (Top Pace) ---
-        const topPace = this.state.data.laps
-            .filter(l => l.lap_number === currentLap && l.lap_duration)
-            .sort((a,b) => a.lap_duration - b.lap_duration)
-            .slice(0, 5);
-
-        this.dom.telemetry.innerHTML = topPace.map(l => `
-            <tr>
-                <td><strong>#${l.driver_number}</strong></td>
-                <td>${l.duration_sector_1?.toFixed(2) || '-'}</td>
-                <td>${l.duration_sector_2?.toFixed(2) || '-'}</td>
-                <td>${l.duration_sector_3?.toFixed(2) || '-'}</td>
-                <td style="color:var(--f1-red)">${l.lap_duration.toFixed(3)}</td>
-            </tr>
+        // Update Telemetry Panel
+        const topPace = this.state.data.laps.filter(l => l.lap_number === lap).slice(0, 5);
+        document.querySelector('#tele-table tbody').innerHTML = topPace.map(l => `
+            <tr><td>${l.lap_number}</td><td>${l.duration_sector_1?.toFixed(2)}</td><td>${l.duration_sector_2?.toFixed(2)}</td><td>${l.duration_sector_3?.toFixed(2)}</td></tr>
         `).join('');
-
-        if (currentLap % 10 === 0) this.log(`LAP ${currentLap}: Race order stabilizing.`);
     },
 
     log(msg) {
-        const entry = document.createElement('div');
-        entry.className = 'log-msg';
-        entry.innerHTML = `<span style="color:var(--text-dim); font-size: 0.6rem;">${new Date().toLocaleTimeString()}</span><br>${msg}`;
-        this.dom.log.appendChild(entry);
+        const log = document.getElementById('log-feed');
+        const div = document.createElement('div');
+        div.className = 'log-entry';
+        div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        log.prepend(div);
     }
 };
 
-RaceEngine.init();
+Engine.init();
